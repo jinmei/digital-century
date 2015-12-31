@@ -62,7 +62,7 @@ def solve(max_level, goal):
     # (Note that we don't necessarily have to keep T as it can be derived
     # from N.  But we do this for efficiency).
     # The search is completed when len(N) reaches M (i.e., X=M-1) by appending
-    # the last item of nM = M - (n0 + n1 + ... nX) = M - T (see condition #2).
+    # the last item of nM = M - (n0 + n1 + ... + nX) = M - T (see condition #2).
     tmp = [([0], 0)]
 
     while tmp:
@@ -70,7 +70,8 @@ def solve(max_level, goal):
         level = len(numops_list)
         if level < max_level:
             # Expand the sequence with all possible numbers of operators at
-            # the next level so we can explore the next level for each of them.
+            # the current level so we can explore the next level for each of
+            # them.
             for i in range(0, level - total_ops + 1): # see condition #3
                 tmp.append((numops_list + [i], total_ops + i))
         else:
