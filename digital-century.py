@@ -91,7 +91,8 @@ def tree2str(root):
     if root.val in '*/':
         if type(root.left) is not int and root.left.val in '+-':
             l_str = '(' + l_str + ')'
-        if type(root.right) is not int and root.right.val in '+-':
+        if (type(root.right) is not int and
+            (root.val == '/' or root.right.val in '+-')):
             r_str = '(' + r_str + ')'
     elif root.val == '-':
         if type(root.right) is not int and root.right.val not in '*/':
