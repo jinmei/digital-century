@@ -42,6 +42,42 @@ def calc(program, goal):
             stack.append(opx)
     return stack[0]
 
+class Node(object):
+    def __init__(self, val, left, right):
+        self.val = val
+        self.left = left
+        self.right = right
+
+def tree2str(root):
+    if type(root) is int:
+        return str(root)
+
+    l_str = tree2str(root.left)
+    r_str = tree2str(root.right)
+    if root.val in '*/':
+        if type(root.left) is not int and root.left.val in '+-':
+            l_str = '(' + l_str + ')'
+        if type(root.right) is not int and root.right.val in '+-':
+            r_str = '(' + r_str + ')'
+    elif root.val == '-':
+        if type(root.right) is not int and root.right.val not in '*/':
+            r_str = '(' + r_str + ')'
+    return '%s %s %s' % (l_str, root.val, r_str)
+
+def rpn2str(rpn):
+    stack = []
+    for opx in rpn:
+        if opx in op_conv:
+            # Pop left and right subtrees from the stack.  Note that the order
+            # is important.
+            right = stack.pop()
+            left = stack.pop()
+            stack.append(Node(opx, left, right))
+        else:
+            stack.append(opx)
+    assert(len(stack) == 1)
+    return tree2str(stack[0])
+
 def solve(max_level, goal):
     # Find all possible sequences: [n0, n1, n2, ..., nM] (M=max_level)
     # where nX is the number of binary operators so that
@@ -64,6 +100,7 @@ def solve(max_level, goal):
     # the last item of nM = M - (n0 + n1 + ... + nX) = M - T (see condition #1).
     tmp = [([0], 0)]
 
+    solutions = set()
     while tmp:
         numops_list, total_ops = tmp.pop(0)
         level = len(numops_list)
@@ -88,9 +125,10 @@ def solve(max_level, goal):
                 try:
                     result = calc(program, goal if mono else None)
                     if result == goal:
-                        print('(%s) = %s' %
-                              (' '.join([str(v) for v in program]),
-                               str(result)))
+                        solution = rpn2str(program)
+                        if solution not in solutions:
+                            solutions.add(solution)
+                            print('%s = %s' % (solution, str(result)))
                 except ZeroDivisionError:
                     pass
 
