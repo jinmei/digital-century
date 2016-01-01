@@ -19,8 +19,8 @@ from fractions import Fraction
 import itertools
 
 # Mapping from textual operator to the corresponding lambda expression used
-# in calc() (see below).   Fraction arithmetic is expensive, so we avoid using
-# it unless we may really need it, i.e., it involves division.
+# in calc() (see below).   Fraction arithmetic is VERY expensive, so we avoid
+# using it unless we may really need it, i.e., it involves division.
 op_conv = {'+': lambda a,b: b + a,
            '-': lambda a,b: b - a,
            '*': lambda a,b: b * a,
@@ -28,7 +28,7 @@ op_conv = {'+': lambda a,b: b + a,
 
 # A helper to calculate the given expression in reverse Polish notation.
 # If 'goal' is not None, we assume the expression only contains '+' or '*',
-# so we stop the calculation once an intermediate results exceeds 'goal'.
+# so we stop the calculation once an intermediate result exceeds 'goal'.
 def calc(program, goal):
     stack = []
     for opx in program:
@@ -47,9 +47,9 @@ def solve(max_level, goal):
     # where nX is the number of binary operators so that
     # '1 <n0 ops> 2 <n1 ops> 3 <n2 ops> ... M+1 <nM ops>' can be a valid
     # Reverse Polish Notation.  Key conditions are:
-    # 1. n0 is always 0 (since the operators are binary)
-    # 2. n0 + n1 + n2 + ... + nM = M
-    # 3. for any X, n0 + n1 + n2 + ... + nX <= X
+    # 1. n0 + n1 + ... + nM = M
+    # 2. for any X, n0 + n1 + ... + nX <= X
+    # (Note that from condition #2 n0 is always 0.)
     # We'll build the sequences in 'numops_list' below while exploring cases
     # in a BFS-like (or DP-like) manner.
 
@@ -61,7 +61,7 @@ def solve(max_level, goal):
     # (Note that we don't necessarily have to keep T as it can be derived
     # from N.  But we do this for efficiency).
     # The search is completed when len(N) reaches M (i.e., X=M-1) by appending
-    # the last item of nM = M - (n0 + n1 + ... + nX) = M - T (see condition #2).
+    # the last item of nM = M - (n0 + n1 + ... + nX) = M - T (see condition #1).
     tmp = [([0], 0)]
 
     while tmp:
@@ -71,7 +71,7 @@ def solve(max_level, goal):
             # Expand the sequence with all possible numbers of operators at
             # the current level so we can explore the next level for each of
             # them.
-            for i in range(0, level - total_ops + 1): # see condition #3
+            for i in range(0, level - total_ops + 1): # see condition #2
                 tmp.append((numops_list + [i], total_ops + i))
         else:
             numops_list.append(max_level - total_ops)
