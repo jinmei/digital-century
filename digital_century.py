@@ -94,10 +94,32 @@ def tree2str(root):
         if (type(root.right) is not int and
             (root.val == '/' or root.right.val in '+-')):
             r_str = '(' + r_str + ')'
-    elif root.val == '-':
-        if type(root.right) is not int and root.right.val not in '*/':
-            r_str = '(' + r_str + ')'
     return '%s %s %s' % (l_str, root.val, r_str)
+
+# Tweak the expression tree so we can omit unnecessary parentheses in the
+# right hand of the '-' operator.  We can do this by negating all right-hand
+# descendant '+-' nodes that are directly reachable from 'node' (i.e., there's
+# no '*' or '-' in the middle).  We have to do this recursively.
+# Note that the tree will not be usable for calculation after this modification
+# anymore.  It's okay since we only use it for printing.
+def reduce_subs(node):
+    if type(node) == int:
+        return
+
+    reduce_subs(node.left)
+    reduce_subs(node.right)
+
+    if node.val != '-':
+        return
+
+    nodes = [node.right]
+    while nodes:
+        n = nodes.pop(0)
+        if type(n) is not int:
+            if n.val in '+-':
+                n.val = ('-' if n.val == '+' else '+')
+                nodes.append(n.left)
+                nodes.append(n.right)
 
 def rpn2str(rpn):
     stack = []
@@ -110,7 +132,7 @@ def rpn2str(rpn):
             stack.append(Node(opx, left, right))
         else:
             stack.append(opx)
-    assert(len(stack) == 1)
+    reduce_subs(stack[0])
     return tree2str(stack[0])
 
 def solve(max_level, goal):
