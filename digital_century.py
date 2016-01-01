@@ -91,33 +91,37 @@ def tree2str(root):
     if root.val in '*/':
         if type(root.left) is not int and root.left.val in '+-':
             l_str = '(' + l_str + ')'
-        if (type(root.right) is not int and
-            (root.val == '/' or root.right.val in '+-')):
+        if type(root.right) is not int and root.right.val in '+-':
             r_str = '(' + r_str + ')'
     return '%s %s %s' % (l_str, root.val, r_str)
 
 # Tweak the expression tree so we can omit unnecessary parentheses in the
-# right hand of the '-' operator.  We can do this by negating all right-hand
-# descendant '+-' nodes that are directly reachable from 'node' (i.e., there's
-# no '*' or '-' in the middle).  We have to do this recursively.
+# right hand of the '-/' operator.  We can do this by reversing all right-hand
+# descendant '+-' or '*/' nodes that are directly reachable from 'node'
+# (i.e., there's no '*/' or '+-' in the middle).  We have to do this
+# recursively.
 # Note that the tree will not be usable for calculation after this modification
 # anymore.  It's okay since we only use it for printing.
-def reduce_subs(node):
+def reduce_subdivs(node):
     if type(node) == int:
         return
 
-    reduce_subs(node.left)
-    reduce_subs(node.right)
+    reduce_subdivs(node.left)
+    reduce_subdivs(node.right)
 
-    if node.val != '-':
+    if node.val == '-':
+        conv = {'+': '-', '-': '+'}
+    elif node.val == '/':
+        conv = {'*': '/', '/': '*'}
+    else:
         return
 
     nodes = [node.right]
     while nodes:
         n = nodes.pop(0)
         if type(n) is not int:
-            if n.val in '+-':
-                n.val = ('-' if n.val == '+' else '+')
+            if n.val in conv:
+                n.val = conv[n.val]
                 nodes.append(n.left)
                 nodes.append(n.right)
 
@@ -132,7 +136,7 @@ def rpn2str(rpn):
             stack.append(Node(opx, left, right))
         else:
             stack.append(opx)
-    reduce_subs(stack[0])
+    reduce_subdivs(stack[0])
     return tree2str(stack[0])
 
 def solve(max_level, goal):

@@ -31,7 +31,6 @@ class DigitalCenturyTest(unittest.TestCase):
         # Check necessary parentheses
         self.assertEqual('1 * (2 + 3)', rpn2str([1, 2, 3, '+', '*']))
         self.assertEqual('1 / (2 + 3)', rpn2str([1, 2, 3, '+', '/']))
-        self.assertEqual('1 / (2 * 3)', rpn2str([1, 2, 3, '*', '/']))
 
         # Subtraction reduction
         # 1 - (2 - 3) = 1 - 2 + 3
@@ -50,6 +49,11 @@ class DigitalCenturyTest(unittest.TestCase):
         # (1 - (2 - 3)) * 4) = (1 - 2 + 3) * 4
         self.assertEqual('(1 - 2 + 3) * 4',
                          rpn2str([1, 2, 3, '-', '-', 4, '*']))
+
+        # Division reduction (more complicated are essentially covered in
+        # tests for subtraction reduction as the code base is the same)
+        # 1 / (2 * 3) => 1 / 2 / 3
+        self.assertEqual('1 / 2 / 3', rpn2str([1, 2, 3, '*', '/']))
 
 if '__main__' == __name__:
     unittest.main()
