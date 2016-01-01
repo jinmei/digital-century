@@ -52,7 +52,7 @@ class DigitalCenturyTest(unittest.TestCase):
 
         # Division reduction (more complicated are essentially covered in
         # tests for subtraction reduction as the code base is the same)
-        # 1 / (2 * 3) => 1 / 2 / 3
+        # 1 / (2 * 3) = 1 / 2 / 3
         self.assertEqual('1 / 2 / 3', rpn2str([1, 2, 3, '*', '/']))
 
 if '__main__' == __name__:
