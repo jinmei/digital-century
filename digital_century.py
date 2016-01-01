@@ -14,8 +14,9 @@
 # OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 # PERFORMANCE OF THIS SOFTWARE.
 
-import sys
+from optparse import OptionParser
 import itertools
+from multiprocessing import Lock, Condition, Process, Queue, Pipe
 
 # Simplified fraction class, specifically designed for the purpose in this
 # module: it doesn't try reduction on construction or on the result of
@@ -139,7 +140,56 @@ def rpn2str(rpn):
     reduce_subdivs(stack[0])
     return tree2str(stack[0])
 
-def solve(max_level, goal):
+def run_worker(conn, goal, max_level, tasks, task_lock, task_cv):
+    solutions = set()
+    while True:
+        with task_lock:
+            while tasks.empty():
+                task_cv.wait()
+            task = tasks.get()
+        if task is None:
+            # received termination command.  Pass the collected solutions to
+            # the master process and exit.
+            conn.send(solutions)
+            break
+        numops_list = task
+
+        # Build all possible RPN's for 'numops_list' and '1, 2, ..., M+1',
+        # calculate its value, and see if it's equal to the goal value.
+        for ops in itertools.product('+-*/', repeat=max_level):
+            program = []
+            mono = not('-' in ops or '/' in ops) # for optimization
+            use_frac = '/' in ops
+            for i in range(0, max_level + 1):
+                program.append(i + 1)
+                program.extend(ops[0:numops_list[i]])
+                ops = ops[numops_list[i]:]
+            try:
+                result = calc(program, goal if mono else None, use_frac)
+                if result == goal:
+                    solution = rpn2str(program)
+                    if solution not in solutions:
+                        solutions.add(solution)
+            except ZeroDivisionError:
+                pass
+
+def solve(max_level, goal, num_workers):
+    # prepare message queue shared with workers
+    tasks = Queue()
+    task_lock = Lock()
+    task_cv = Condition(lock=task_lock)
+
+    # create and start workers
+    workers = []
+    for i in range(0, num_workers):
+        solutions = set()
+        parent_conn, child_connn = Pipe()
+        worker = Process(target=run_worker,
+                         args=(child_connn, goal, max_level, tasks,
+                               task_lock, task_cv))
+        worker.start()
+        workers.append((worker, parent_conn))
+
     # Find all possible sequences: [n0, n1, n2, ..., nM] (M=max_level)
     # where nX is the number of binary operators so that
     # '1 <n0 ops> 2 <n1 ops> 3 <n2 ops> ... M+1 <nM ops>' can be a valid
@@ -161,7 +211,6 @@ def solve(max_level, goal):
     # the last item of nM = M - (n0 + n1 + ... + nX) = M - T (see condition #1).
     tmp = [([0], 0)]
 
-    solutions = set()
     while tmp:
         numops_list, total_ops = tmp.pop(0)
         level = len(numops_list)
@@ -172,30 +221,40 @@ def solve(max_level, goal):
             for i in range(0, level - total_ops + 1): # see condition #2
                 tmp.append((numops_list + [i], total_ops + i))
         else:
+            # Found one valid RPN template.  Pass it to workers and have them
+            # work on it.
             numops_list.append(max_level - total_ops)
+            with task_lock:
+                tasks.put(numops_list)
+                task_cv.notify()
 
-            # Build all possible RPN's for 'numops_list' and '1, 2, ..., M+1',
-            # calculate its value, and see if it's equal to the goal value.
-            for ops in itertools.product('+-*/', repeat=max_level):
-                program = []
-                mono = not('-' in ops or '/' in ops) # for optimization
-                use_frac = '/' in ops
-                for i in range(0, max_level + 1):
-                    program.append(i + 1)
-                    program.extend(ops[0:numops_list[i]])
-                    ops = ops[numops_list[i]:]
-                try:
-                    result = calc(program, goal if mono else None, use_frac)
-                    if result == goal:
-                        solution = rpn2str(program)
-                        if solution not in solutions:
-                            solutions.add(solution)
-                            print('%s = %s' % (solution, str(result)))
-                except ZeroDivisionError:
-                    pass
+    # Tell workers all data have been passed.
+    solutions = set()
+    with task_lock:
+        for _ in workers:
+            tasks.put(None)
+        task_cv.notify_all()
+
+    # Wait until all workers complete the tasks.  Receive their solutions,
+    # unify them with suppressing any duplicates found by different workers,
+    # and print the final solutions.
+    for w in workers:
+        worker_solutions = w[1].recv()
+        w[0].join()
+        for solution in worker_solutions:
+            if solution not in solutions:
+                solutions.add(solution)
+    for solution in solutions:
+        print(solution)
 
 if __name__ == '__main__':
-    max_num = sys.argv[2] if len(sys.argv) > 2 else 9
+    parser = OptionParser(usage='usage: %prog [options] target [max_number]')
+    parser.add_option("-w", "--workers", dest='num_workers',
+                      action="store", default=1,
+                      help="number of worker processes [default: %default]")
+    (options, args) = parser.parse_args()
+
+    max_num = args[1] if len(args) > 1 else 9
     max_level = int(max_num) - 1
-    goal = sys.argv[1]
-    solve(int(max_level), int(goal))
+    goal = args[0]
+    solve(int(max_level), int(goal), int(options.num_workers))
