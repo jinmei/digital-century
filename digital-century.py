@@ -15,32 +15,66 @@
 # PERFORMANCE OF THIS SOFTWARE.
 
 import sys
-from fractions import Fraction
 import itertools
 
-# Mapping from textual operator to the corresponding lambda expression used
-# in calc() (see below).   Fraction arithmetic is VERY expensive, so we avoid
-# using it unless we may really need it, i.e., it involves division.
-op_conv = {'+': lambda a,b: b + a,
-           '-': lambda a,b: b - a,
-           '*': lambda a,b: b * a,
-           '/': lambda a,b: b / Fraction(a)}
+# Simplified fraction class, specifically designed for the purpose in this
+# module: it doesn't try reduction on construction or on the result of
+# arithmetic operation as it can be very expensive (that's probably why
+# the standard fractions.Fraction is slow and why we don't use it).
+class Fraction(object):
+    def __init__(self, val, denom=1):
+        self.n = val            # numerator
+        self.d = denom          # denominator
 
-# A helper to calculate the given expression in reverse Polish notation.
+    def add(self, other):
+        return Fraction(self.n * other.d + self.d * other.n, self.d * other.d)
+
+    def sub(self, other):
+        return Fraction(self.n * other.d - self.d * other.n, self.d * other.d)
+
+    def mult(self, other):
+        return Fraction(self.n * other.n, self.d * other.d)
+
+    def div(self, other):
+        return Fraction(self.n * other.d, self.d * other.n)
+
+# Mapping from textual operator to the corresponding lambda expression used
+# in calc() (see below).  _int() will be used when there's no need to consider
+# fractions; otherwise _frac() will be used.
+op_conv_int = {'+': lambda a,b: b + a,
+               '-': lambda a,b: b - a,
+               '*': lambda a,b: b * a,
+               '/': lambda a,b: b / a}
+op_conv_frac = {'+': lambda a,b: b.add(a),
+                '-': lambda a,b: b.sub(a),
+                '*': lambda a,b: b.mult(a),
+                '/': lambda a,b: b.div(a)}
+
+# A helper to calculate the given expression in the Reverse Polish Notation.
 # If 'goal' is not None, we assume the expression only contains '+' or '*',
 # so we stop the calculation once an intermediate result exceeds 'goal'.
-def calc(program, goal):
+# 'use_frac' indicates whether we should use fractions (i.e., at least one '/'
+# is included).
+# It returns None if the result is obviously not what is wanted (different from
+# goal if it's specified or the result is not an integer).
+def calc(program, goal, use_frac):
     stack = []
+    op_conv = op_conv_frac if use_frac else op_conv_int
     for opx in program:
         if opx in op_conv:
             a = stack.pop()
             b = stack.pop()
             stack.append(op_conv[opx](a, b))
             if goal is not None and stack[-1] > goal:
-                return None     # indicate we interrupted the calculation
+                return None
+        elif use_frac:
+            stack.append(Fraction(opx))
         else:
             stack.append(opx)
-    return stack[0]
+    result = stack[0]
+    if use_frac:
+        result = int(result.n / result.d) if result.n % result.d == 0 else None
+    return result
 
 class Node(object):
     def __init__(self, val, left, right):
@@ -67,7 +101,7 @@ def tree2str(root):
 def rpn2str(rpn):
     stack = []
     for opx in rpn:
-        if opx in op_conv:
+        if opx in op_conv_int:
             # Pop left and right subtrees from the stack.  Note that the order
             # is important.
             right = stack.pop()
@@ -118,12 +152,13 @@ def solve(max_level, goal):
             for ops in itertools.product('+-*/', repeat=max_level):
                 program = []
                 mono = not('-' in ops or '/' in ops) # for optimization
+                use_frac = '/' in ops
                 for i in range(0, max_level + 1):
                     program.append(i + 1)
                     program.extend(ops[0:numops_list[i]])
                     ops = ops[numops_list[i]:]
                 try:
-                    result = calc(program, goal if mono else None)
+                    result = calc(program, goal if mono else None, use_frac)
                     if result == goal:
                         solution = rpn2str(program)
                         if solution not in solutions:
