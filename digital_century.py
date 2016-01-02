@@ -77,27 +77,36 @@ def calc(program, goal, use_frac):
         result = int(result.n / result.d) if result.n % result.d == 0 else None
     return result
 
+# This class and following several functions is defined to convert a RPN
+# expression into normalized string.  We'll first convert the RPN into a
+# tree structure.  This class represents nodes of the tree.
 class Node(object):
     def __init__(self, val, left, right):
         self.val = val
         self.left = left
         self.right = right
 
-def tree2str(root):
-    if type(root) is int:
-        return str(root)
+# Convert an expression in the form of binary tree whose root is node into
+# string, adding parentheses if and only if they are necessary.
+def tree2str(node):
+    if type(node) is int:
+        return str(node)
 
-    l_str = tree2str(root.left)
-    r_str = tree2str(root.right)
-    if root.val in '*/':
-        if type(root.left) is not int and root.left.val in '+-':
+    l_str = tree2str(node.left)
+    r_str = tree2str(node.right)
+
+    # Assuming left-hand side of '-' and '/' has been reduced to suppress
+    # unnecessary parentheses, we should only consider trivial cases
+    if node.val in '*/':
+        if type(node.left) is not int and node.left.val in '+-':
             l_str = '(' + l_str + ')'
-        if type(root.right) is not int and root.right.val in '+-':
+        if type(node.right) is not int and node.right.val in '+-':
             r_str = '(' + r_str + ')'
-    return '%s %s %s' % (l_str, root.val, r_str)
+
+    return '%s %s %s' % (l_str, node.val, r_str)
 
 # Tweak the expression tree so we can omit unnecessary parentheses in the
-# right hand of the '-/' operator.  We can do this by reversing all right-hand
+# right hand of the '-/' operator.  We can do this by reversing all left-hand
 # descendant '+-' or '*/' nodes that are directly reachable from 'node'
 # (i.e., there's no '*/' or '+-' in the middle).  We have to do this
 # recursively.
@@ -126,6 +135,9 @@ def reduce_subdivs(node):
                 nodes.append(n.left)
                 nodes.append(n.right)
 
+# Convert the given RPN into a string so the result doesn't contain unnecessary
+# parentheses.  In addition to use it for printing purposes, we'll also use
+# the result as a key to suppress essentially duplicate expressions.
 def rpn2str(rpn):
     stack = []
     for opx in rpn:
@@ -140,16 +152,18 @@ def rpn2str(rpn):
     reduce_subdivs(stack[0])
     return tree2str(stack[0])
 
+# The loop for worker processes.
 def run_worker(conn, goal, max_level, tasks, task_lock, task_cv):
     solutions = set()
     while True:
+        # get the next task from the master process.
         with task_lock:
             while tasks.empty():
                 task_cv.wait()
             task = tasks.get()
         if task is None:
             # received termination command.  Pass the collected solutions to
-            # the master process and exit.
+            # the master and exit.
             conn.send(solutions)
             break
         numops_list = task
@@ -164,15 +178,21 @@ def run_worker(conn, goal, max_level, tasks, task_lock, task_cv):
                 program.append(i + 1)
                 program.extend(ops[0:numops_list[i]])
                 ops = ops[numops_list[i]:]
+            solution = None
             try:
                 result = calc(program, goal if mono else None, use_frac)
-                if result == goal:
+                if goal is None:
+                    solution = '%s = %s' % (rpn2str(program), str(result))
+                elif result == goal:
                     solution = rpn2str(program)
-                    if solution not in solutions:
-                        solutions.add(solution)
             except ZeroDivisionError:
-                pass
+                if goal is None:
+                    solution = '%s = Div0' % (rpn2str(program),)
+            finally:
+                if solution is not None and solution not in solutions:
+                    solutions.add(solution)
 
+# Top-level code for the master process to solve the problem.
 def solve(max_level, goal, num_workers):
     # prepare message queue shared with workers
     tasks = Queue()
@@ -248,13 +268,15 @@ def solve(max_level, goal, num_workers):
         print(solution)
 
 if __name__ == '__main__':
-    parser = OptionParser(usage='usage: %prog [options] target [max_number]')
+    parser = OptionParser(usage='usage: %prog [options] [target]')
     parser.add_option("-w", "--workers", dest='num_workers',
                       action="store", default=1,
                       help="number of worker processes [default: %default]")
+    parser.add_option("-m", "--max_num", dest='max_num',
+                      action="store", default=9,
+                      help="max number of the sequence [default: %default]")
     (options, args) = parser.parse_args()
 
-    max_num = args[1] if len(args) > 1 else 9
-    max_level = int(max_num) - 1
-    goal = args[0]
-    solve(int(max_level), int(goal), int(options.num_workers))
+    goal = int(args[0]) if len(args) > 0 else None
+    max_level = int(options.max_num) - 1
+    solve(int(max_level), goal, int(options.num_workers))
