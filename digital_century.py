@@ -165,6 +165,7 @@ def run_worker(conn, goal, max_level, tasks, task_lock, task_cv):
             # received termination command.  Pass the collected solutions to
             # the master and exit.
             conn.send(solutions)
+            conn.send(None)
             break
         numops_list = task
 
@@ -191,6 +192,10 @@ def run_worker(conn, goal, max_level, tasks, task_lock, task_cv):
             finally:
                 if solution is not None and solution not in solutions:
                     solutions.add(solution)
+
+        if len(solutions) > 10000:
+            conn.send(solutions)
+            solutions.clear()
 
 # Top-level code for the master process to solve the problem.
 def solve(max_level, goal, num_workers):
@@ -255,15 +260,22 @@ def solve(max_level, goal, num_workers):
             tasks.put(None)
         task_cv.notify_all()
 
+    conns = set([w[1] for w in workers])
+    while conns:
+        for c in conns.copy():
+            worker_data = c.recv()
+            if worker_data is None:
+                conns.remove(c)
+                continue
+            for solution in worker_data:
+                if solution not in solutions:
+                    solutions.add(solution)
+
     # Wait until all workers complete the tasks.  Receive their solutions,
     # unify them with suppressing any duplicates found by different workers,
     # and print the final solutions.
     for w in workers:
-        worker_solutions = w[1].recv()
         w[0].join()
-        for solution in worker_solutions:
-            if solution not in solutions:
-                solutions.add(solution)
     for solution in solutions:
         print(solution)
 
