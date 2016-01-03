@@ -129,11 +129,10 @@ def reduce_subdivs(node):
     nodes = [node.right]
     while nodes:
         n = nodes.pop(0)
-        if type(n) is not int:
-            if n.val in conv:
-                n.val = conv[n.val]
-                nodes.append(n.left)
-                nodes.append(n.right)
+        if type(n) is not int and n.val in conv:
+            n.val = conv[n.val]
+            nodes.append(n.left)
+            nodes.append(n.right)
 
 # Convert the given RPN into a string so the result doesn't contain unnecessary
 # parentheses.  In addition to use it for printing purposes, we'll also use
