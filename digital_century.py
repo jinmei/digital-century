@@ -193,6 +193,12 @@ def run_worker(conn, goal, max_level, tasks, task_lock, task_cv):
                 if solution is not None and solution not in solutions:
                     solutions.add(solution)
 
+        # Pass some intermediate solutions to the master process to avoid
+        # having too much intermediate data at the cost of having more
+        # intermediate duplicates (they'll eventually be unified at the master
+        # anyway).  The threshold was an arbitrary choice.  In practice, this
+        # only happens when 'goal' is None, i.e., trying to collect all
+        # expressions.
         if len(solutions) > 10000:
             conn.send(solutions)
             solutions.clear()
@@ -260,6 +266,13 @@ def solve(max_level, goal, num_workers):
             tasks.put(None)
         task_cv.notify_all()
 
+    # Wait until all workers complete the tasks, while receiving any
+    # intermediate and last solutions.  The received solutions may not
+    # necessarily be fully unique, so we have to unify them here, again.
+    # Received data of 'None' means the corresponding worker has completed
+    # its task.
+    # Note: here we assume all workers are reasonably equally active in
+    # sending data, so we simply perform blocking receive.
     conns = set([w[1] for w in workers])
     while conns:
         for c in conns.copy():
@@ -271,9 +284,8 @@ def solve(max_level, goal, num_workers):
                 if solution not in solutions:
                     solutions.add(solution)
 
-    # Wait until all workers complete the tasks.  Receive their solutions,
-    # unify them with suppressing any duplicates found by different workers,
-    # and print the final solutions.
+    # All workers have completed.  Cleanup them and print the final unified
+    # results.
     for w in workers:
         w[0].join()
     for solution in solutions:
