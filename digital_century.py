@@ -135,7 +135,7 @@ def reduce_subdivs(node):
             nodes.append(n.right)
 
 # Convert the given RPN into a string so the result doesn't contain unnecessary
-# parentheses.  In addition to use it for printing purposes, we'll also use
+# parentheses.  In addition to using it for printing purposes, we'll also use
 # the result as a key to suppress essentially duplicate expressions.
 def rpn2str(rpn):
     stack = []
