@@ -182,12 +182,12 @@ def run_worker(conn, goal, max_level, tasks, task_lock, task_cv):
             try:
                 result = calc(program, goal if mono else None, use_frac)
                 if goal is None:
-                    solution = '%s = %s' % (rpn2str(program), str(result))
+                    solution = (result, rpn2str(program))
                 elif result == goal:
                     solution = rpn2str(program)
             except ZeroDivisionError:
                 if goal is None:
-                    solution = '%s = Div0' % (rpn2str(program),)
+                    solution = ('Div0', '%s' % (rpn2str(program),))
             finally:
                 if solution is not None and solution not in solutions:
                     solutions.add(solution)
@@ -284,11 +284,19 @@ def solve(max_level, goal, num_workers):
                     solutions.add(solution)
 
     # All workers have completed.  Cleanup them and print the final unified
-    # results.
+    # results.  If we are to show all expressions (i.e. goal is None), sort
+    # results by the expressions' values (listing integers followed by all
+    # non-integers, followed by 'divided by 0' cases.
     for w in workers:
         w[0].join()
-    for solution in solutions:
-        print(solution)
+    if goal is None:
+        l = list(solutions)
+        l.sort(key=lambda x: (0, x[0]) if type(x[0]) == int else (1, str(x[0])))
+        for solution in l:
+            print('%s = %s' % (solution[1], str(solution[0])))
+    else:
+        for solution in solutions:
+            print(solution)
 
 if __name__ == '__main__':
     parser = OptionParser(usage='usage: %prog [options] [target]')
